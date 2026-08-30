@@ -35,3 +35,20 @@ def mask_account_card(account_card: str) -> str:
         raise ValueError("Некорректный номер карты или счёта")
 
     return f"{item_type} {masked_number}"
+
+
+def get_date(date_string: str) -> str:
+    """Преобразовать дату из ISO-формата в формат ``ДД.ММ.ГГГГ``.
+
+    Args:
+        date_string: Дата, например ``2024-03-11T02:26:18.671407``.
+
+    Returns:
+        Дата в формате ``ДД.ММ.ГГГГ``.
+
+    Raises:
+        ValueError: Если передана строка с некорректной датой.
+    """
+    date = datetime.fromisoformat(date_string)
+    return date.strftime("%d.%m.%Y")
+
