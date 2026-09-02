@@ -1,3 +1,6 @@
+"""Функции для маскировки банковских данных."""
+
+
 def get_mask_card_number(card_number: str) -> str | None:
     """Вернуть маску номера банковской карты.
 
@@ -10,9 +13,11 @@ def get_mask_card_number(card_number: str) -> str | None:
         Номер карты в формате ``XXXX XX** **** XXXX`` или ``None``,
         если длина номера карты не равна 16 символам или содержит не цифры.
     """
+    normalized_card_number = "".join(card_number.split())
+
     return (
-        f"{card_number[:4]} {card_number[4:6]}** **** {card_number[-4:]}"
-        if len(card_number) == 16 and card_number.isdigit()
+        f"{normalized_card_number[:4]} {normalized_card_number[4:6]}** **** {normalized_card_number[-4:]}"
+        if len(normalized_card_number) == 16 and normalized_card_number.isdigit()
         else None
     )
 
@@ -27,4 +32,6 @@ def get_mask_account(account_number: str) -> str | None:
         Последние четыре цифры счёта с двумя звёздочками перед ними или
         ``None``, если длина номера меньше четырёх символов.
     """
-    return f"**{account_number[-4:]}" if len(account_number) >= 4 else None
+    normalized_account_number = "".join(account_number.split())
+
+    return f"**{normalized_account_number[-4:]}" if len(normalized_account_number) >= 4 else None
