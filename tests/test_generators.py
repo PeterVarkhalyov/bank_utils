@@ -16,14 +16,20 @@ from src.processing import Transaction
         ("CNY", []),
     ],
 )
-def test_filter_by_currency(generator_transactions: list[Transaction], currency: str, expected_ids: list[int],) -> None:
+def test_filter_by_currency(
+    generator_transactions: list[Transaction],
+    currency: str,
+    expected_ids: list[int],
+) -> None:
     """Фильтр выдаёт транзакции выбранной валюты в исходном порядке."""
     result = list(filter_by_currency(generator_transactions, currency))
 
     assert [transaction["id"] for transaction in result] == expected_ids
 
 
-def test_filter_by_currency_returns_iterator(generator_transactions: list[Transaction],) -> None:
+def test_filter_by_currency_returns_iterator(
+    generator_transactions: list[Transaction],
+) -> None:
     """Фильтр возвращает ленивый итератор."""
     result = filter_by_currency(generator_transactions, "USD")
 
@@ -39,7 +45,9 @@ def test_filter_by_currency_without_currency_data_raises_key_error() -> None:
         next(filter_by_currency(transactions, "USD"))
 
 
-def test_transaction_descriptions(generator_transactions: list[Transaction],) -> None:
+def test_transaction_descriptions(
+    generator_transactions: list[Transaction],
+) -> None:
     """Описания выдаются по одному в исходном порядке."""
     result = list(transaction_descriptions(generator_transactions))
 
