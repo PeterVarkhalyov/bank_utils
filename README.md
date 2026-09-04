@@ -21,10 +21,13 @@
 ├── htmlcov/
 ├── src/
 │   ├── __init__.py
+│   ├── generators.py
 │   ├── masks.py
+│   ├── processing.py
 │   └── widget.py
 ├── tests/
 │   ├── __init__.py
+│   ├── test_generators.py
 │   ├── test_main.py
 │   ├── test_masks.py
 │   ├── test_processing.py
@@ -91,14 +94,15 @@ poetry run python
 ```
 
 ```python
+from src.generators import filter_by_currency, transaction_descriptions, card_number_generator
 from src.masks import get_mask_account, get_mask_card_number
+from src.processing import filter_by_state, sort_by_date
 from src.widget import get_date, mask_account_card
-from src.processing import filter_by_state
 
 transactions = [{'id': 41428829, 'state': 'EXECUTED', 'date': '2019-07-03T18:35:29.512364'},
-             {'id': 939719570, 'state': 'EXECUTED', 'date': '2018-06-30T02:08:58.425572'},
-             {'id': 594226727, 'state': 'CANCELED', 'date': '2018-09-12T21:27:25.241689'},
-             {'id': 615064591, 'state': 'CANCELED', 'date': '2018-10-14T08:21:33.419441'}]
+                {'id': 939719570, 'state': 'EXECUTED', 'date': '2018-06-30T02:08:58.425572'},
+                {'id': 594226727, 'state': 'CANCELED', 'date': '2018-09-12T21:27:25.241689'},
+                {'id': 615064591, 'state': 'CANCELED', 'date': '2018-10-14T08:21:33.419441'}]
 
 print(get_mask_card_number("7000792289606361"))
 print(get_mask_account("73654108430135874305"))
@@ -258,6 +262,105 @@ sort_by_date([{"id": 41428829, "state": "EXECUTED", "date": "2019-07-03T18:35:29
 
 Модуль `tests.test_main` предназначен для тестировния функционала модулей из пакета `src`
 
+## Модуль `generators`
+
+Модуль `src.generators` содержит ленивые генераторы. Они возвращают значения
+по одному и не создают полный результат в памяти.
+
+Примеры ниже используют следующий список транзакций:
+
+```python
+transactions = [
+    {
+        "id": 1,
+        "description": "Перевод организации",
+        "operationAmount": {
+            "amount": "100.00",
+            "currency": {"name": "Доллар США", "code": "USD"},
+        },
+    },
+    {
+        "id": 2,
+        "description": "Перевод со счета на счет",
+        "operationAmount": {
+            "amount": "250.00",
+            "currency": {"name": "Российский рубль", "code": "RUB"},
+        },
+    },
+]
+```
+
+### `filter_by_currency`
+
+```python
+filter_by_currency(transactions: list[Transaction], currency: str,) -> Iterator[Transaction]
+```
+
+Возвращает итератор по транзакциям с заданным кодом валюты. Порядок исходного
+списка сохраняется.
+
+```python
+from src.generators import filter_by_currency
+
+usd_transactions = filter_by_currency(transactions, "USD")
+
+print(next(usd_transactions))
+# Транзакция с id=1
+```
+
+Получить все подходящие транзакции можно с помощью `list`, если набор данных
+не слишком большой:
+
+```python
+list(filter_by_currency(transactions, "USD"))
+```
+
+### `transaction_descriptions`
+
+```python
+transaction_descriptions(transactions: list[Transaction],) -> Iterator[str]
+```
+
+Поочерёдно возвращает значения ключа `description`:
+
+```python
+from src.generators import transaction_descriptions
+
+descriptions = transaction_descriptions(transactions)
+
+print(next(descriptions))
+# Перевод организации
+
+print(next(descriptions))
+# Перевод со счета на счет
+```
+
+### `card_number_generator`
+
+```python
+card_number_generator(start: int, stop: int) -> Iterator[str]
+```
+
+Генерирует номера карт в диапазоне от `start` до `stop` включительно. Каждый
+номер дополняется нулями до 16 цифр и разбивается на четыре блока.
+
+```python
+from src.generators import card_number_generator
+
+for card_number in card_number_generator(1, 3):
+    print(card_number)
+```
+
+Результат:
+
+```text
+0000 0000 0000 0001
+0000 0000 0000 0002
+0000 0000 0000 0003
+```
+
+Допустимые значения находятся в диапазоне от `1` до `9999999999999999`.
+Некорректные границы вызывают `ValueError` при начале обхода генератора.
 
 ## Тестирование
 
@@ -272,6 +375,7 @@ poetry install
 ### Организация тестов
 
 - `tests/conftest.py` — общие фикстуры с наборами банковских операций;
+- `tests/test_generators.py` — тесты фильтрации, описаний и номеров карт;
 - `tests/test_masks.py` — тесты маскирования карт и счетов;
 - `tests/test_widget.py` — тесты распознавания карт/счетов и обработки дат;
 - `tests/test_processing.py` — тесты фильтрации и сортировки операций.
@@ -303,6 +407,7 @@ poetry run pytest
 Запустить тесты конкретного модуля:
 
 ```shell
+poetry run pytest tests/test_generators.py
 poetry run pytest tests/test_masks.py
 poetry run pytest tests/test_widget.py
 poetry run pytest tests/test_processing.py
