@@ -12,6 +12,11 @@
 - маскировка номера банковского счёта;
 - автоматическое распознавание карты или счёта по входной строке;
 - преобразование даты;
+- фильтрация операций по статусу;
+- сортировка операций по дате;
+- последовательная обработка транзакций с помощью генераторов;
+- генерация номеров банковских карт в заданном диапазоне;
+- логирование результатов выполнения функций в консоль или файл;
 - проверка кода с помощью Flake8, Black, isort и mypy.
 
 - ## Структура проекта
@@ -21,12 +26,14 @@
 ├── htmlcov/
 ├── src/
 │   ├── __init__.py
+│   ├── decorators.py
 │   ├── generators.py
 │   ├── masks.py
 │   ├── processing.py
 │   └── widget.py
 ├── tests/
 │   ├── __init__.py
+│   ├── test_decorators.py
 │   ├── test_generators.py
 │   ├── test_main.py
 │   ├── test_masks.py
@@ -362,6 +369,61 @@ for card_number in card_number_generator(1, 3):
 Допустимые значения находятся в диапазоне от `1` до `9999999999999999`.
 Некорректные границы вызывают `ValueError` при начале обхода генератора.
 
+## Модуль `decorators`
+
+Модуль `src.decorators` содержит типизированный декоратор `log`, который
+записывает итог выполнения функции. Декоратор сохраняет исходную сигнатуру,
+возвращаемый тип, имя и документацию функции.
+
+### `log`
+
+```python
+log(filename: str | None = None)
+```
+
+Без аргумента `filename` сообщение выводится в консоль:
+
+```python
+from src.decorators import log
+
+
+@log()
+def add(x: int, y: int) -> int:
+    return x + y
+
+
+result = add(1, 2)
+# В консоли: add ok
+# result == 3
+```
+
+Если передать имя файла, сообщения добавляются в конец этого файла:
+
+```python
+@log(filename="mylog.txt")
+def multiply(x: int, y: int) -> int:
+    return x * y
+
+
+multiply(2, 3)
+# Содержимое mylog.txt: multiply ok
+```
+
+При ошибке записываются имя функции, текст исключения и входные параметры:
+
+```python
+@log()
+def divide(x: int, y: int) -> float:
+    return x / y
+
+
+divide(1, 0)
+# divide error: division by zero. Inputs: (1, 0), {}
+```
+
+После логирования исходное исключение выбрасывается повторно. Вызывающий код
+может обработать его конструкцией `try/except`.
+
 ## Тестирование
 
 Тесты проекта написаны с помощью `pytest`. Для измерения покрытия используется
@@ -375,6 +437,7 @@ poetry install
 ### Организация тестов
 
 - `tests/conftest.py` — общие фикстуры с наборами банковских операций;
+- `tests/test_decorators.py` — тесты вывода логов в консоль и файл;
 - `tests/test_generators.py` — тесты фильтрации, описаний и номеров карт;
 - `tests/test_masks.py` — тесты маскирования карт и счетов;
 - `tests/test_widget.py` — тесты распознавания карт/счетов и обработки дат;
@@ -407,6 +470,7 @@ poetry run pytest
 Запустить тесты конкретного модуля:
 
 ```shell
+poetry run pytest tests/test_decorators.py
 poetry run pytest tests/test_generators.py
 poetry run pytest tests/test_masks.py
 poetry run pytest tests/test_widget.py

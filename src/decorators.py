@@ -18,7 +18,9 @@ def _write_log(message: str, filename: str | None) -> None:
         log_file.write(f"{message}\n")
 
 
-def log(filename: str | None = None,) -> Callable[[Callable[P, R]], Callable[P, R]]:
+def log(
+    filename: str | None = None,
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Логировать успешное выполнение функции или возникшую ошибку.
 
     Args:
@@ -38,7 +40,7 @@ def log(filename: str | None = None,) -> Callable[[Callable[P, R]], Callable[P, 
             try:
                 result = func(*args, **kwargs)
             except Exception as error:
-                message = (f"{func.__name__} error: {error}. " f"Inputs: {args}, {kwargs}")
+                message = f"{func.__name__} error: {error}. " f"Inputs: {args}, {kwargs}"
                 _write_log(message, filename)
                 raise
 

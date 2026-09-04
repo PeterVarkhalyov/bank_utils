@@ -30,9 +30,7 @@ def test_log_error_to_console(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(ZeroDivisionError):
         divide(1, 0)
 
-    assert capsys.readouterr().out == (
-        "divide error: division by zero. Inputs: (1, 0), {}\n"
-    )
+    assert capsys.readouterr().out == ("divide error: division by zero. Inputs: (1, 0), {}\n")
 
 
 def test_log_error_with_keyword_arguments(
@@ -47,14 +45,10 @@ def test_log_error_with_keyword_arguments(
     with pytest.raises(ValueError, match="invalid value"):
         fail(10, reason="invalid value")
 
-    assert capsys.readouterr().out == (
-        "fail error: invalid value. " "Inputs: (10,), {'reason': 'invalid value'}\n"
-    )
+    assert capsys.readouterr().out == ("fail error: invalid value. " "Inputs: (10,), {'reason': 'invalid value'}\n")
 
 
-def test_log_success_to_file(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_log_success_to_file(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """При заданном filename сообщения добавляются в файл, а не в консоль."""
     log_file = tmp_path / "mylog.txt"
 
@@ -79,9 +73,7 @@ def test_log_error_to_file(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -
     with pytest.raises(ZeroDivisionError):
         divide(1, 0)
 
-    assert log_file.read_text(encoding="utf-8") == (
-        "divide error: division by zero. Inputs: (1, 0), {}\n"
-    )
+    assert log_file.read_text(encoding="utf-8") == ("divide error: division by zero. Inputs: (1, 0), {}\n")
     assert capsys.readouterr().out == ""
 
 
