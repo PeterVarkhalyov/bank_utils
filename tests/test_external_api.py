@@ -3,11 +3,13 @@
 from unittest.mock import Mock, patch
 
 import pytest
+import requests
 
 from src.external_api import (
     EXCHANGE_RATES_URL,
     Transaction,
     _extract_transaction_date,
+    get_api_key,
     get_response,
     transaction_amount_convert,
 )
@@ -26,6 +28,25 @@ def make_transaction(
             "currency": {"code": currency},
         },
     }
+
+
+def test_get_api_key_returns_environment_value() -> None:
+    """Функция должна возвращать API-ключ из переменной окружения."""
+    with patch("src.external_api.os.getenv", return_value="test-api-key") as mocked_getenv:
+        result = get_api_key()
+
+    assert result == "test-api-key"
+    mocked_getenv.assert_called_once_with("EXCHANGE_RATES_API_KEY")
+
+
+@pytest.mark.parametrize("api_key", [None, ""])
+def test_get_api_key_raises_runtime_error_if_key_is_missing(api_key: str | None) -> None:
+    """Отсутствующий или пустой API-ключ должен вызывать RuntimeError."""
+    with patch("src.external_api.os.getenv", return_value=api_key) as mocked_getenv:
+        with pytest.raises(RuntimeError, match="Не задана переменная EXCHANGE_RATES_API_KEY"):
+            get_api_key()
+
+    mocked_getenv.assert_called_once_with("EXCHANGE_RATES_API_KEY")
 
 
 def test_get_response_returns_api_error_as_dictionary() -> None:
@@ -47,6 +68,68 @@ def test_get_response_returns_api_error_as_dictionary() -> None:
 
     assert result == error_response
     mocked_response.raise_for_status.assert_not_called()
+
+
+def test_get_response_raises_runtime_error_for_invalid_json() -> None:
+    """Невалидный JSON при успешном HTTP-ответе должен вызвать RuntimeError."""
+    json_error = requests.exceptions.JSONDecodeError(
+        "Invalid JSON",
+        "not-json",
+        0,
+    )
+    mocked_response = Mock()
+    mocked_response.json.side_effect = json_error
+
+    with (
+        patch("src.external_api.get_api_key", return_value="test-key"),
+        patch("src.external_api.requests.get", return_value=mocked_response),
+    ):
+        with pytest.raises(RuntimeError, match="API вернул ответ не в формате JSON") as error_info:
+            get_response("https://example.com", {"amount": 100.0})
+
+    assert error_info.value.__cause__ is json_error
+    mocked_response.json.assert_called_once_with()
+    mocked_response.raise_for_status.assert_called_once_with()
+
+
+def test_get_response_propagates_http_error_for_invalid_json() -> None:
+    """HTTPError должен передаваться при ошибочном ответе без корректного JSON."""
+    json_error = requests.exceptions.JSONDecodeError(
+        "Invalid JSON",
+        "not-json",
+        0,
+    )
+    http_error = requests.exceptions.HTTPError("500 Server Error")
+    mocked_response = Mock()
+    mocked_response.json.side_effect = json_error
+    mocked_response.raise_for_status.side_effect = http_error
+
+    with (
+        patch("src.external_api.get_api_key", return_value="test-key"),
+        patch("src.external_api.requests.get", return_value=mocked_response),
+    ):
+        with pytest.raises(requests.exceptions.HTTPError, match="500 Server Error") as error_info:
+            get_response("https://example.com", {"amount": 100.0})
+
+    assert error_info.value is http_error
+    mocked_response.json.assert_called_once_with()
+    mocked_response.raise_for_status.assert_called_once_with()
+
+
+def test_get_response_rejects_non_dictionary_json() -> None:
+    """JSON-ответ должен быть словарём."""
+    mocked_response = Mock()
+    mocked_response.json.return_value = [{"result": 100.0}]
+
+    with (
+        patch("src.external_api.get_api_key", return_value="test-key"),
+        patch("src.external_api.requests.get", return_value=mocked_response),
+    ):
+        with pytest.raises(RuntimeError, match="API вернул ответ в неожиданном формате"):
+            get_response("https://example.com", {"amount": 100.0})
+
+    mocked_response.json.assert_called_once_with()
+    mocked_response.raise_for_status.assert_called_once_with()
 
 
 def test_transaction_amount_convert_raises_detailed_api_error() -> None:
