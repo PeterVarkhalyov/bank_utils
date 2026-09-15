@@ -62,10 +62,12 @@ def get_transactions_from_csv(file_path: str | Path) -> list[Transaction]:
                 )
                 return []
 
+            skipped_items = 0
             for row in reader:
                 row_is_empty = not any(isinstance(value, str) and value.strip() for value in row.values())
 
                 if row_is_empty:
+                    skipped_items += 1
                     continue
 
                 transactions.append(cast(Transaction, dict(row)))
@@ -78,9 +80,8 @@ def get_transactions_from_csv(file_path: str | Path) -> list[Transaction]:
         )
         return []
 
-    skipped_items = len(list(reader)) - len(transactions)
     if skipped_items:
-        logger.error(
+        logger.warning(
             "В файле %s пропущено некорректных элементов: %d",
             file_path,
             skipped_items,
@@ -124,6 +125,7 @@ def get_transactions_from_xls(file_path: str | Path) -> list[Transaction]:
         )
 
         transactions: list[Transaction] = []
+        skipped_items = 0
 
         for record in records:
             row_is_empty = not any(
@@ -131,9 +133,17 @@ def get_transactions_from_xls(file_path: str | Path) -> list[Transaction]:
             )
 
             if row_is_empty:
+                skipped_items += 1
                 continue
 
             transactions.append(cast(Transaction, record))
+
+        if skipped_items:
+            logger.warning(
+                "В файле %s пропущено некорректных элементов: %d",
+                file_path,
+                skipped_items,
+            )
 
         logger.info(
             "Успешно загружено транзакций из файла %s: %d",
