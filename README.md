@@ -19,6 +19,7 @@
 - логирование результатов выполнения функций в консоль или файл;
 - обработка JSON-файлов или ответов от API в формате JSON;
 - конвертация суммы транзакции в целевую валюту с помощью Exchange Rates Data API;
+- логированние;
 - проверка кода с помощью Flake8, Black, isort и mypy.
 
 - ## Структура проекта
@@ -28,6 +29,7 @@
 ├── data/
 │   └── operations.json
 ├── htmlcov/
+├── logs/
 ├── src/
 │   ├── __init__.py
 │   ├── decorators.py
@@ -42,7 +44,7 @@
 │   ├── test_decorators.py
 │   ├── test_external_api.py
 │   ├── test_generators.py
-│   ├── test_main.py
+│   ├── test_logging.py
 │   ├── test_masks.py
 │   ├── test_processing.py
 │   ├── test_utils.py
@@ -624,6 +626,26 @@ transaction_amount_convert(transaction: Transaction, to_currency: str = "RUB") -
 Выходящая информация:
 - сумма транзакции в целевой валюте `to_currency`, округлённая до двух знаков после запятой. 
 
+## Логирование
+
+Логирование проекта осуществлены с помощью библиотеки `logging`. Логи помещены в папку `logs`.
+Логируются успешные и ошибочные случаи.
+
+Логуруются:
+- модуль `masks.py`: `logs.masks.log`
+- модуль `utils.py`: `logs.utils.log`
+
+Структура файлов логирования:
+```
+2026-09-15 14:52:41,023 - masks - DEBUG - Начало маскирования номера банковской карты
+2026-09-15 14:52:41,023 - masks - DEBUG - Начало маскирования номера банковской карты
+2026-09-15 14:52:41,045 - masks - DEBUG - Начало маскирования номера банковской карты
+2026-09-15 14:52:41,045 - masks - INFO - Номер карты успешно замаскирован: 7000 79** **** 6361
+2026-09-15 14:52:41,047 - masks - DEBUG - Начало маскирования номера банковской карты
+2026-09-15 14:52:41,047 - masks - INFO - Номер карты успешно замаскирован: 1234 56** **** 3456
+2026-09-15 14:52:41,047 - masks - DEBUG - Начало маскирования номера банковской карты
+```
+
 ## Тестирование
 
 Тесты проекта написаны с помощью `pytest`. Для измерения покрытия используется
@@ -640,6 +662,7 @@ poetry install
 - `tests/test_decorators.py` — тесты вывода логов в консоль и файл;
 - `tests/test_external_api.py` — тесты обработки методов API;
 - `tests/test_generators.py` — тесты фильтрации, описаний и номеров карт;
+- `tests/test_logging.py` — тесты логирования;
 - `tests/test_masks.py` — тесты маскирования карт и счетов;
 - `tests/test_processing.py` — тесты фильтрации и сортировки операций;
 - `tests/test_utils.py` — тесты обработки JSON-файлов;
@@ -676,6 +699,7 @@ poetry install
 - некорректная ISO-дата;
 - неизвестный формат даты;
 - отсутствие обязательных полей в транзакции;
+- варианты логирования;
 - исключения `ValueError`, `KeyError` и `TypeError`.
 
 ### Запуск тестов
@@ -692,6 +716,7 @@ poetry run pytest
 poetry run pytest tests/test_decorators.py
 poetry run pytest tests/test_external_api.py
 poetry run pytest tests/test_generators.py
+poetry run pytest tests/test_logging.py
 poetry run pytest tests/test_masks.py
 poetry run pytest tests/test_processing.py
 poetry run pytest tests/test_utils.py
