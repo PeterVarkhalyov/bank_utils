@@ -18,6 +18,7 @@
 - генерация номеров банковских карт в заданном диапазоне;
 - логирование результатов выполнения функций в консоль или файл;
 - обработка JSON-файлов или ответов от API в формате JSON;
+- обработка CSV и Excel файлов;
 - конвертация суммы транзакции в целевую валюту с помощью Exchange Rates Data API;
 - логированние;
 - проверка кода с помощью Flake8, Black, isort и mypy.
@@ -27,7 +28,9 @@
 ```text
 .
 ├── data/
-│   └── operations.json
+│   ├── operations.json
+│   ├── transactions.csv
+│   └── transactions_excel.xlsx
 ├── htmlcov/
 ├── logs/
 ├── src/
@@ -37,6 +40,7 @@
 │   ├── generators.py
 │   ├── masks.py
 │   ├── processing.py
+│   ├── readers.py
 │   ├── utils.py
 │   └── widget.py
 ├── tests/
@@ -47,6 +51,7 @@
 │   ├── test_logging.py
 │   ├── test_masks.py
 │   ├── test_processing.py
+│   ├── test_readers.py
 │   ├── test_utils.py
 │   └── test_widget.py
 ├── .coverage
@@ -277,10 +282,6 @@ sort_by_date([{"id": 41428829, "state": "EXECUTED", "date": "2019-07-03T18:35:29
 [{'id': 41428829, 'state': 'EXECUTED', 'date': '2019-07-03T18:35:29.512364'}, {'id': 615064591, 'state': 'CANCELED', 'date': '2018-10-14T08:21:33.419441'}, {'id': 594226727, 'state': 'CANCELED', 'date': '2018-09-12T21:27:25.241689'}, {'id': 939719570, 'state': 'EXECUTED', 'date': '2018-06-30T02:08:58.425572'}]
 ```
 
-## Модуль `test_main`
-
-Модуль `tests.test_main` предназначен для тестировния функционала модулей из пакета `src`
-
 ## Модуль `generators`
 
 Модуль `src.generators` содержит ленивые генераторы. Они возвращают значения
@@ -476,7 +477,7 @@ divide(1, 0)
 | from                          | string   | Yes      | Отправитель (счет или карта) |
 | to                            | string   | Yes      | Получатель (счет или карта)  |
 
-### get_transactions_from_json
+### `get_transactions_from_json`
 
 ```python
 get_transactions_from_json(file_path: str | Path) -> list[Transaction]
@@ -509,7 +510,7 @@ EXCHANGE_RATES_API_KEY=API_KEY
 ```
 API_KEY - получаем при регистрации аккаунта **Exchange Rates Data API**
 
-### get_api_key
+### `get_api_key`
 
 ```python
 load_dotenv()
@@ -519,7 +520,7 @@ get_api_key() -> str
 
 Функция возвращает API ключ от сервиса **EXCHANGE_RATES_API_KEY** из файла `.env`
 
-### get_response
+### `get_response`
 
 ```python
 ApiResponse = dict[str, Any]
@@ -530,7 +531,7 @@ get_response(url: str, params: dict[str, str | float]) -> ApiResponse
 ```
 Функция получает `url` - URL метода API и `params` - параметры запроса. Возвращает ответ API в виде словаря.
 
-### _raise_api_error
+### `_raise_api_error`
 
 ```python
 ApiResponse = dict[str, Any]
@@ -540,7 +541,7 @@ _raise_api_error(api_response: ApiResponse) -> None
 
 Функция возвращает исключения с кодом и сообщением об ошибке API.
 
-### _normalize_target_currency
+### `_normalize_target_currency`
 
 ```python
 _normalize_target_currency(to_currency: str) -> str
@@ -551,7 +552,7 @@ _normalize_target_currency(to_currency: str) -> str
 Получает: `to_currency` - код целевой валюты.
 Возвращает: Код целевой валюты без пробелов и в верхнем регистре. Если целевая валюта передана пустой - возвращает RUB.
 
-### _extract_amount
+### `_extract_amount`
 
 ```python
 ApiResponse = dict[str, Any]
@@ -560,7 +561,7 @@ _extract_amount(operation_amount: ApiResponse) -> float
 ```
 Функция проверяет тип данных суммы транзакции.
 
-### _extract_currency_code
+### `_extract_currency_code`
 
 ```python
 ApiResponse = dict[str, Any]
@@ -570,7 +571,7 @@ _extract_currency_code(operation_amount: ApiResponse) -> str
 
 Функция проверяет тип данных кода валюты транзакции.
 
-### _extract_transaction_date
+### `_extract_transaction_date`
 
 ```python
 Transaction = dict[str, Any]
@@ -586,7 +587,7 @@ _extract_transaction_date(transaction: Transaction, date_format: str = "YYYY-MM-
 Функция преобразует дату транзакции в переданный формат.
 Допустимые форматы дат задаются через **DATE_FORMATS**.
 
-### _extract_transaction_data
+### `_extract_transaction_data`
 
 ```python
 Transaction = dict[str, Any]
@@ -595,7 +596,7 @@ _extract_transaction_data(transaction: Transaction) -> tuple[float, str, str]
 ```
 Функция извлекает и осуществляет проверку суммы, кода валюты и даты транзакции.
 
-### _extract_conversion_result
+### `_extract_conversion_result`
 
 ```python
 ApiResponse = dict[str, Any]
@@ -605,7 +606,7 @@ _extract_conversion_result(api_response: ApiResponse) -> float
 
 Функция извлекает и проверяет результат конвертации из ответа API.
 
-### transaction_amount_convert
+### `transaction_amount_convert`
 
 ```python
 Transaction = dict[str, Any]
@@ -626,16 +627,71 @@ transaction_amount_convert(transaction: Transaction, to_currency: str = "RUB") -
 Выходящая информация:
 - сумма транзакции в целевой валюте `to_currency`, округлённая до двух знаков после запятой. 
 
+## Модуль `readers`
+
+Модуль `src.readers` объединяет функции обработки CSV и Excel файлов, содержащих транзакции.
+
+### `get_transactions_from_csv`
+
+Функция обрабатывает CSV-файлы, которые содержат информацию о финансовых транзакциях.
+Файл находится в `data/transactions.csv`.
+
+Структура файла:
+```text
+id;state;date;amount;currency_name;currency_code;from;to;description
+650703;EXECUTED;2023-09-05T11:30:32Z;16210;Sol;PEN;Счет 58803664561298323391;Счет 39745660563456619397;Перевод организации
+3598919;EXECUTED;2020-12-06T23:00:58Z;29740;Peso;COP;Discover 3172601889670065;Discover 0720428384694643;Перевод с карты на карту
+```
+Вызов функции:
+```python
+Transaction = dict[str, Any]
+
+get_transactions_from_csv(file_path: str | Path) -> list[Transaction]
+```
+Функция:
+- принимает путь к CSV-файлу, который содержит финансовые транзакции; 
+- возвращает список словарей с транзакциями. Если файл отсутствует,
+недоступен, пуст или содержит некорректные данные, возвращается пустой список.
+
+### `get_transactions_from_xls`
+
+Функция обрабатывает Excel файлы, которые содержат информацию о финансовых транзакциях.
+Файл находится в `data/transactions_excel.xlsx`.
+
+Структура файла:
+
+| field | type    | descript                 |
+|-------|---------|--------------------------|
+| id    | int     | Идентификатор транзакции |
+| state | string  | Статус транзакции        |
+| date | datetime | Дата и время             |
+| amount | float   | Сумма транзакции         |
+| currency_name | string  | Наименование валюты      |
+| currency_code | string  | Код валюты ISO           |
+| from      | string | Реквизиты отправителя    |
+| to | string | Реквизиты получателя |
+| description | string | Описание транзакции |
+
+```python
+Transaction = dict[str, Any]
+
+get_transactions_from_xls(file_path: str | Path) -> list[Transaction]
+```
+
+Функция:
+- принимает путь к Excel файлу, который содержит финансовые транзакции; 
+- возвращает список словарей с транзакциями. Если файл отсутствует,
+недоступен, пуст или содержит некорректные данные, возвращается пустой список.
+
 ## Логирование
 
-Логирование проекта осуществлены с помощью библиотеки `logging`. Логи помещены в папку `logs`.
-Логируются успешные и ошибочные случаи.
+Логирование проекта осуществлены с помощью библиотеки `logging`. Логи помещены 
+в папку `logs`. Логируются успешные и ошибочные случаи.
 
-Логуруются:
-- модуль `masks.py`: `logs.masks.log`
-- модуль `utils.py`: `logs.utils.log`
+### Модуль `masks`
+Логуруются в `logs/masks.log`
 
-Структура файлов логирования:
+Структура логирования:
 ```
 2026-09-15 14:52:41,023 - masks - DEBUG - Начало маскирования номера банковской карты
 2026-09-15 14:52:41,023 - masks - DEBUG - Начало маскирования номера банковской карты
@@ -645,6 +701,29 @@ transaction_amount_convert(transaction: Transaction, to_currency: str = "RUB") -
 2026-09-15 14:52:41,047 - masks - INFO - Номер карты успешно замаскирован: 1234 56** **** 3456
 2026-09-15 14:52:41,047 - masks - DEBUG - Начало маскирования номера банковской карты
 ```
+
+### Модуль `utils`
+Логуруются в `logs/utils.log`
+
+Структура логирования:
+```
+2026-09-15 19:52:43,282 - utils - DEBUG - Начало загрузки транзакций из файла: operations.json
+2026-09-15 19:52:43,290 - utils - DEBUG - Начало загрузки транзакций из файла: missing.json
+2026-09-15 19:52:43,589 - utils - DEBUG - Начало загрузки транзакций из файла: data/operations.json
+2026-09-15 19:52:43,592 - utils - INFO - Успешно загружено транзакций из файла data/operations.json: 2
+```
+
+### Модуль `readers`
+Логуруются в `logs/readers.log`
+
+Структура логирования:
+```
+2026-09-15 19:52:43,477 - readers - get_transactions_from_csv - DEBUG - Начало загрузки транзакций из файла: data\transactions.csv
+2026-09-15 19:52:43,478 - readers - get_transactions_from_csv - INFO - Успешно загружено транзакций из файла data\transactions.csv: 2
+2026-09-15 19:52:43,486 - readers - get_transactions_from_csv - DEBUG - Начало загрузки транзакций из файла: empty.csv
+2026-09-15 19:52:43,487 - readers - get_transactions_from_csv - ERROR - Некорректная структура файла empty.csv: отсутствует строка наименования столбцов.
+```
+
 
 ## Тестирование
 
@@ -665,6 +744,7 @@ poetry install
 - `tests/test_logging.py` — тесты логирования;
 - `tests/test_masks.py` — тесты маскирования карт и счетов;
 - `tests/test_processing.py` — тесты фильтрации и сортировки операций;
+- `tests/test_readers.py` — тесты обработки CSV и Excel файлов;
 - `tests/test_utils.py` — тесты обработки JSON-файлов;
 - `tests/test_widget.py` — тесты распознавания карт/счетов и обработки дат.
 
@@ -673,7 +753,7 @@ poetry install
 операций с разными статусами и датами, в том числе ошибочными и граничными
 значениями.
 
-Для проверки API используются Mock и patch.
+Для проверки API, обработки CSV и Excel файлов используются Mock и patch.
 
 Проверяются:
 - корректные номера карт и счетов;
@@ -719,6 +799,7 @@ poetry run pytest tests/test_generators.py
 poetry run pytest tests/test_logging.py
 poetry run pytest tests/test_masks.py
 poetry run pytest tests/test_processing.py
+poetry run pytest tests/test_readers.py
 poetry run pytest tests/test_utils.py
 poetry run pytest tests/test_widget.py
 ```
