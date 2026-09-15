@@ -17,29 +17,39 @@
 - последовательная обработка транзакций с помощью генераторов;
 - генерация номеров банковских карт в заданном диапазоне;
 - логирование результатов выполнения функций в консоль или файл;
+- обработка JSON-файлов или ответов от API в формате JSON;
+- конвертация суммы транзакции в целевую валюту с помощью Exchange Rates Data API;
 - проверка кода с помощью Flake8, Black, isort и mypy.
 
 - ## Структура проекта
 
 ```text
 .
+├── data/
+│   └── operations.json
 ├── htmlcov/
 ├── src/
 │   ├── __init__.py
 │   ├── decorators.py
+│   ├── external_api.py
 │   ├── generators.py
 │   ├── masks.py
 │   ├── processing.py
+│   ├── utils.py
 │   └── widget.py
 ├── tests/
 │   ├── __init__.py
 │   ├── test_decorators.py
+│   ├── test_external_api.py
 │   ├── test_generators.py
 │   ├── test_main.py
 │   ├── test_masks.py
 │   ├── test_processing.py
+│   ├── test_utils.py
 │   └── test_widget.py
 ├── .coverage
+├── .env
+├── .env.example
 ├── .flake8
 ├── .gitignore
 ├── pyproject.toml
@@ -424,6 +434,196 @@ divide(1, 0)
 После логирования исходное исключение выбрасывается повторно. Вызывающий код
 может обработать его конструкцией `try/except`.
 
+## Модуль `utils`
+
+Модуль `src.utils` объединяет функции JSON-файла, содержащего транзакции. Файл, 
+содержащий транзакции находится в `data/operations.json`.
+
+### Структура данных
+
+Структура транзакции из `data/operations.json`:
+
+```python
+{
+    "id": int,
+    "state": string,
+    "date": datetime,
+    "operationAmount": {
+      "amount": string,
+      "currency": {
+        "name": string,
+        "code": string
+      }
+    },
+    "description": string,
+    "from": string,
+    "to": string"
+}
+```
+Значение ключей:
+
+| Key                           | Type     | Required | Descript                     |
+|-------------------------------|----------|----------|------------------------------|
+| id                            | integer  | Yes      | Идентификатор транзакции     |
+| state                         | string   | Yes      | Статус транзакции            |
+| date                          | datetime | Yes      | Дата и время транзакции      |
+| operationAmount.amount        | string   | Yes      | Сумма транзакции             |
+| operationAmount.currency.name | string   | No       | Название валюты транзакции   |
+| operationAmount.currency.code | string   | Yes      | Код валюты транзакции в ISO  |
+| description                   | string   | No       | Описание транзакции          |
+| from                          | string   | Yes      | Отправитель (счет или карта) |
+| to                            | string   | Yes      | Получатель (счет или карта)  |
+
+### get_transactions_from_json
+
+```python
+get_transactions_from_json(file_path: str | Path) -> list[Transaction]
+```
+
+Принимает путь к JSON-файлу, который содержит транзакции. Возвращает новый список словарей с транзакциями.
+
+```python
+from src.utils import get_transactions_from_json
+
+
+get_transactions_from_json("data/operations.json")
+[{'id': 441945886, 'state': 'EXECUTED', 'date': '2019-08-26T10:50:58.294041', 'operationAmount': {'amount': '31957.58', 'currency': {'name': 'руб.', 'code': 'RUB'}}, 'description': 'Перевод организации', 'from': 'Maestro 1596837868705199', 'to': 'Счет 64686473678894779589'}]
+```
+
+## Модуль `external_api`
+
+Модуль `src.external_api` объединяет функции обработки методов API.
+Использует файл `.env` для хранения критически важной информации.
+
+### API
+
+Для обработки транзакции используется сервис **Exchange Rates Data API**. 
+[Документация](https://marketplace.apilayer.com/exchangerates_data-api#documentation)  
+
+Насройка `.env`:
+```.env
+# Exchange Rates Data API.
+EXCHANGE_RATES_API_KEY=API_KEY
+```
+API_KEY - получаем при регистрации аккаунта **Exchange Rates Data API**
+
+### get_api_key
+
+```python
+load_dotenv()
+
+get_api_key() -> str
+```
+
+Функция возвращает API ключ от сервиса **EXCHANGE_RATES_API_KEY** из файла `.env`
+
+### get_response
+
+```python
+ApiResponse = dict[str, Any]
+
+API_TIMEOUT_SECONDS = 10
+
+get_response(url: str, params: dict[str, str | float]) -> ApiResponse
+```
+Функция получает `url` - URL метода API и `params` - параметры запроса. Возвращает ответ API в виде словаря.
+
+### _raise_api_error
+
+```python
+ApiResponse = dict[str, Any]
+
+_raise_api_error(api_response: ApiResponse) -> None
+```
+
+Функция возвращает исключения с кодом и сообщением об ошибке API.
+
+### _normalize_target_currency
+
+```python
+_normalize_target_currency(to_currency: str) -> str
+```
+
+Функция возвращает нормализированный код целевой валюты.
+
+Получает: `to_currency` - код целевой валюты.
+Возвращает: Код целевой валюты без пробелов и в верхнем регистре. Если целевая валюта передана пустой - возвращает RUB.
+
+### _extract_amount
+
+```python
+ApiResponse = dict[str, Any]
+
+_extract_amount(operation_amount: ApiResponse) -> float
+```
+Функция проверяет тип данных суммы транзакции.
+
+### _extract_currency_code
+
+```python
+ApiResponse = dict[str, Any]
+
+_extract_currency_code(operation_amount: ApiResponse) -> str
+```
+
+Функция проверяет тип данных кода валюты транзакции.
+
+### _extract_transaction_date
+
+```python
+Transaction = dict[str, Any]
+
+DATE_FORMATS = {
+    "YYYY-MM-DD HH:MM:SS": "%Y-%m-%d %H:%M:%S",
+    "YYYY-MM-DD": "%Y-%m-%d",
+}
+
+_extract_transaction_date(transaction: Transaction, date_format: str = "YYYY-MM-DD",) -> str
+```
+
+Функция преобразует дату транзакции в переданный формат.
+Допустимые форматы дат задаются через **DATE_FORMATS**.
+
+### _extract_transaction_data
+
+```python
+Transaction = dict[str, Any]
+
+_extract_transaction_data(transaction: Transaction) -> tuple[float, str, str]
+```
+Функция извлекает и осуществляет проверку суммы, кода валюты и даты транзакции.
+
+### _extract_conversion_result
+
+```python
+ApiResponse = dict[str, Any]
+
+_extract_conversion_result(api_response: ApiResponse) -> float
+```
+
+Функция извлекает и проверяет результат конвертации из ответа API.
+
+### transaction_amount_convert
+
+```python
+Transaction = dict[str, Any]
+
+EXCHANGE_RATES_URL = "https://api.apilayer.com/exchangerates_data/convert"
+
+transaction_amount_convert(transaction: Transaction, to_currency: str = "RUB") -> float
+```
+
+Функция возвращает сумму транзакции в целевой валюте `to_currency`.
+Для транзакций в целевой валюте возвращается исходная сумма. 
+Суммы для валют, отличных от целевой валюты, конвертируются через метод `convert` **Exchange Rates Data API**.
+
+Передаваемая информацмя: 
+- transaction - транзакция с суммой и кодом валюты в `operationAmount`;
+- to_currency - целевая валюта.
+
+Выходящая информация:
+- сумма транзакции в целевой валюте `to_currency`, округлённая до двух знаков после запятой. 
+
 ## Тестирование
 
 Тесты проекта написаны с помощью `pytest`. Для измерения покрытия используется
@@ -438,18 +638,21 @@ poetry install
 
 - `tests/conftest.py` — общие фикстуры с наборами банковских операций;
 - `tests/test_decorators.py` — тесты вывода логов в консоль и файл;
+- `tests/test_external_api.py` — тесты обработки методов API;
 - `tests/test_generators.py` — тесты фильтрации, описаний и номеров карт;
 - `tests/test_masks.py` — тесты маскирования карт и счетов;
-- `tests/test_widget.py` — тесты распознавания карт/счетов и обработки дат;
-- `tests/test_processing.py` — тесты фильтрации и сортировки операций.
+- `tests/test_processing.py` — тесты фильтрации и сортировки операций;
+- `tests/test_utils.py` — тесты обработки JSON-файлов;
+- `tests/test_widget.py` — тесты распознавания карт/счетов и обработки дат.
 
 Для проверки нескольких вариантов входных данных применяется
 `pytest.mark.parametrize`. Фикстуры предоставляют тестам готовые списки
 операций с разными статусами и датами, в том числе ошибочными и граничными
 значениями.
 
-Проверяются:
+Для проверки API используются Mock и patch.
 
+Проверяются:
 - корректные номера карт и счетов;
 - пустые строки, неверная длина и недопустимые символы;
 - различные названия и регистры типов карт и счетов;
@@ -457,6 +660,22 @@ poetry install
 - фильтрация по различным статусам;
 - сортировка по возрастанию и убыванию;
 - одинаковые и нестандартные даты;
+- пустой или повреждённый JSON;
+- отсутствующий файл;
+- ошибка декодирования файла;
+- отсутствующий или пустой API-ключ в `.env`;
+- JSON с ошибкой;
+- невалидный JSON при успешном HTTP-ответе;
+- HTTPError;
+- ошибка API;
+- пустая целевая валюта;
+- неправильная структура транзакции;
+- некорректная сумма транзакции;
+- разные форматы ошибки API;
+- нечисловая строка result ответ API;
+- некорректная ISO-дата;
+- неизвестный формат даты;
+- отсутствие обязательных полей в транзакции;
 - исключения `ValueError`, `KeyError` и `TypeError`.
 
 ### Запуск тестов
@@ -471,10 +690,12 @@ poetry run pytest
 
 ```shell
 poetry run pytest tests/test_decorators.py
+poetry run pytest tests/test_external_api.py
 poetry run pytest tests/test_generators.py
 poetry run pytest tests/test_masks.py
-poetry run pytest tests/test_widget.py
 poetry run pytest tests/test_processing.py
+poetry run pytest tests/test_utils.py
+poetry run pytest tests/test_widget.py
 ```
 
 Запустить один тест:
