@@ -6,6 +6,7 @@ import pytest
 
 from src.processing import (
     Transaction,
+    filter_by_currency_code,
     filter_by_state,
     process_bank_operations,
     process_bank_search,
@@ -44,6 +45,64 @@ def test_filter_returns_new_list(transactions: list[Transaction]) -> None:
 
     assert result is not transactions
     assert transactions == original
+
+
+def test_filter_by_currency_code_uses_rub_by_default(
+    generator_transactions: list[Transaction],
+) -> None:
+    """По умолчанию должны возвращаться только операции в рублях."""
+    result = filter_by_currency_code(generator_transactions)
+
+    assert [transaction["id"] for transaction in result] == [873106923, 594226727]
+
+
+@pytest.mark.parametrize(
+    ("currency_code", "expected_ids"),
+    [
+        ("USD", [939719570, 142264268, 895315941]),
+        ("RUB", [873106923, 594226727]),
+        ("EUR", []),
+        ("rub", []),
+        ("", []),
+    ],
+)
+def test_filter_by_currency_code(
+    generator_transactions: list[Transaction],
+    currency_code: str,
+    expected_ids: list[int],
+) -> None:
+    """Операции должны фильтроваться по точному коду валюты."""
+    result = filter_by_currency_code(generator_transactions, currency_code)
+
+    assert [transaction["id"] for transaction in result] == expected_ids
+
+
+def test_filter_by_currency_code_skips_incomplete_operations() -> None:
+    """Операции с некорректной структурой валюты должны пропускаться."""
+    transactions: list[Transaction] = [
+        {},
+        {"operationAmount": None},
+        {"operationAmount": {}},
+        {"operationAmount": {"currency": None}},
+        {"operationAmount": {"currency": {}}},
+        {"id": 1, "operationAmount": {"currency": {"code": "RUB"}}},
+    ]
+
+    result = filter_by_currency_code(transactions)
+
+    assert result == [{"id": 1, "operationAmount": {"currency": {"code": "RUB"}}}]
+
+
+def test_filter_by_currency_code_returns_new_list(
+    generator_transactions: list[Transaction],
+) -> None:
+    """Фильтрация валюты не должна изменять исходный список."""
+    original = [transaction.copy() for transaction in generator_transactions]
+
+    result = filter_by_currency_code(generator_transactions)
+
+    assert result is not generator_transactions
+    assert generator_transactions == original
 
 
 @pytest.mark.parametrize(

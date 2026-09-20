@@ -20,6 +20,40 @@ def filter_by_state(transactions: list[Transaction], state: str = "EXECUTED") ->
     return [transaction for transaction in transactions if transaction.get("state") == state]
 
 
+def filter_by_currency_code(
+    transactions: list[Transaction],
+    currency_code: str = "RUB",
+) -> list[Transaction]:
+    """Функция возвращает банковские операции с указанным кодом валюты.
+
+    Код валюты извлекается из вложенного поля
+    ``operationAmount.currency.code``. Операции с отсутствующей или
+    некорректной структурой этого поля пропускаются.
+
+    Args:
+        transactions: Список словарей с данными банковских операций.
+        currency_code: Код валюты для фильтрации. По умолчанию ``RUB``.
+
+    Returns:
+        Новый список операций с указанным кодом валюты.
+    """
+    filtered_transactions: list[Transaction] = []
+
+    for transaction in transactions:
+        operation_amount = transaction.get("operationAmount")
+        if not isinstance(operation_amount, dict):
+            continue
+
+        currency = operation_amount.get("currency")
+        if not isinstance(currency, dict):
+            continue
+
+        if currency.get("code") == currency_code:
+            filtered_transactions.append(transaction)
+
+    return filtered_transactions
+
+
 def sort_by_date(transactions: list[Transaction], descending: bool = True) -> list[Transaction]:
     """Вернуть операции, отсортированные по дате.
 
