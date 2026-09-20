@@ -4,7 +4,13 @@ from typing import Any
 
 import pytest
 
-from src.processing import Transaction, filter_by_state, sort_by_date
+from src.processing import (
+    Transaction,
+    filter_by_state,
+    process_bank_operations,
+    process_bank_search,
+    sort_by_date,
+)
 
 
 def test_filter_by_default_state(transactions: list[Transaction]) -> None:
@@ -97,3 +103,95 @@ def test_filter_with_empty_or_incomplete_data(
 ) -> None:
     """Пустые и неполные данные корректно дают пустой результат."""
     assert filter_by_state(transactions) == []
+
+
+@pytest.fixture
+def transactions_with_descriptions() -> list[Transaction]:
+    """Вернуть операции с разными описаниями."""
+    return [
+        {"id": 1, "description": "Перевод организации"},
+        {"id": 2, "description": "Перевод со счета на счет"},
+        {"id": 3, "description": "ПЕРЕВОД ОРГАНИЗАЦИИ"},
+        {"id": 4, "description": "Открытие вклада"},
+        {"id": 5, "description": "Оплата заказа (ООО Ромашка)"},
+        {"id": 6},
+        {"id": 7, "description": None},
+    ]
+
+
+@pytest.mark.parametrize(
+    ("search_string", "expected_ids"),
+    [
+        ("перевод", [1, 2, 3]),
+        ("организации", [1, 3]),
+        ("ВКЛАД", [4]),
+        ("несуществующая операция", []),
+        ("", []),
+    ],
+)
+def test_process_bank_search(
+    transactions_with_descriptions: list[Transaction],
+    search_string: str,
+    expected_ids: list[int],
+) -> None:
+    """Поиск должен находить строку в описании без учёта регистра."""
+    result = process_bank_search(transactions_with_descriptions, search_string)
+
+    assert [transaction["id"] for transaction in result] == expected_ids
+
+
+def test_process_bank_search_treats_special_characters_as_text(
+    transactions_with_descriptions: list[Transaction],
+) -> None:
+    """Специальные символы регулярных выражений должны искаться буквально."""
+    result = process_bank_search(transactions_with_descriptions, "(ООО Ромашка)")
+
+    assert [transaction["id"] for transaction in result] == [5]
+
+
+def test_process_bank_search_returns_new_list(
+    transactions_with_descriptions: list[Transaction],
+) -> None:
+    """Результат поиска должен быть новым списком."""
+    result = process_bank_search(transactions_with_descriptions, "перевод")
+
+    assert result is not transactions_with_descriptions
+
+
+def test_process_bank_operations_counts_requested_categories(
+    transactions_with_descriptions: list[Transaction],
+) -> None:
+    """Для каждой запрошенной категории должно возвращаться число операций."""
+    categories = [
+        "Перевод организации",
+        "Перевод со счета на счет",
+        "Открытие вклада",
+        "Закрытие вклада",
+    ]
+
+    result = process_bank_operations(transactions_with_descriptions, categories)
+
+    assert result == {
+        "Перевод организации": 1,
+        "Перевод со счета на счет": 1,
+        "Открытие вклада": 1,
+        "Закрытие вклада": 0,
+    }
+
+
+@pytest.mark.parametrize(
+    ("transactions", "categories", "expected"),
+    [
+        ([], ["Перевод организации"], {"Перевод организации": 0}),
+        ([{"id": 1}], ["Перевод организации"], {"Перевод организации": 0}),
+        ([{"description": None}], ["Перевод организации"], {"Перевод организации": 0}),
+        ([{"description": "Перевод организации"}], [], {}),
+    ],
+)
+def test_process_bank_operations_handles_empty_or_incomplete_data(
+    transactions: list[Transaction],
+    categories: list[str],
+    expected: dict[str, int],
+) -> None:
+    """Пустые и неполные данные должны обрабатываться без ошибок."""
+    assert process_bank_operations(transactions, categories) == expected

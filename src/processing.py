@@ -1,5 +1,6 @@
-"""Функции фильтрации и сортировки банковских операций."""
+"""Функции фильтрации, сортировки и поиска банковских операций."""
 
+import re
 from typing import Any
 
 Transaction = dict[str, Any]
@@ -40,3 +41,55 @@ def sort_by_date(transactions: list[Transaction], descending: bool = True) -> li
         key=lambda transaction: transaction["date"],
         reverse=descending,
     )
+
+
+def process_bank_search(transactions: list[Transaction], search_string: str) -> list[Transaction]:
+    """Функция выбирает банковские операции по строке в описании.
+
+    Поиск выполняется без учёта регистра. Строка поиска обрабатывается
+    как обычный текст, поэтому специальные символы регулярных выражений
+    не изменяют её смысл. Операции без строкового поля ``description``
+    пропускаются.
+
+    Args:
+        transactions: Список банковских операций.
+        search_string: Строка, которую нужно найти в описании операции.
+
+    Returns:
+        Новый список операций, описания которых содержат строку поиска.
+        Для пустой строки поиска возвращается пустой список.
+    """
+    if not search_string:
+        return []
+
+    search_pattern = re.compile(re.escape(search_string), re.IGNORECASE)
+
+    return [
+        transaction
+        for transaction in transactions
+        if isinstance((description := transaction.get("description")), str) and search_pattern.search(description)
+    ]
+
+
+def process_bank_operations(transactions: list[Transaction], categories: list[str]) -> dict[str, int]:
+    """Функция производит расчет количества банковских операций по категориям.
+
+    Название категории сравнивается с полем ``description`` операции.
+    Категории, для которых операции не найдены, остаются в результате
+    со значением ``0``.
+
+    Args:
+        transactions: Список банковских операций.
+        categories: Список названий категорий операций.
+
+    Returns:
+        Словарь с количеством операций в каждой категории.
+    """
+    operation_counts = dict.fromkeys(categories, 0)
+
+    for transaction in transactions:
+        description = transaction.get("description")
+        if isinstance(description, str) and description in operation_counts:
+            operation_counts[description] += 1
+
+    return operation_counts
