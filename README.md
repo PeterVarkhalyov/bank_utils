@@ -21,14 +21,14 @@
 - обработка JSON-файлов или ответов от API в формате JSON;
 - обработка CSV и Excel файлов;
 - конвертация суммы транзакции в целевую валюту с помощью Exchange Rates Data API;
-- логированние;
-- выбирает банковские операции по строке в описании `description`;
-- производит расчет количества банковских операций по категориям `description`;
+- логирование;
+- осуществляет поиск банковских операции по строке в описании `description`;
+- производит подсчет количества банковских операций по категориям `description`;
 - настройка полей различных источников данных через конфигурационный файл;
 - интерактивная обработка и вывод транзакций через консольное меню;
 - проверка кода с помощью Flake8, Black, isort и mypy.
 
-- ## Структура проекта
+## Структура проекта
 
 ```text
 .
@@ -65,7 +65,6 @@
 │   ├── test_utils.py
 │   └── test_widget.py
 ├── .coverage
-├── .env
 ├── .env.example
 ├── .flake8
 ├── .gitignore
@@ -113,7 +112,7 @@ git --version
 5. Проверьте, что проект работает:
 
    ```shell
-   poetry run python -m unittest discover -v
+   poetry run pytest
    ```
 
 Поскольку GitHub-адрес ещё не привязан к текущему локальному репозиторию,
@@ -543,7 +542,7 @@ divide(1, 0)
 
 Структура транзакции из `data/operations.json`:
 
-```python
+```
 {
     "id": int,
     "state": string,
@@ -557,7 +556,7 @@ divide(1, 0)
     },
     "description": string,
     "from": string,
-    "to": string"
+    "to": string
 }
 ```
 Значение ключей:
@@ -600,7 +599,7 @@ get_transactions_from_json("data/operations.json")
 Для обработки транзакции используется сервис **Exchange Rates Data API**. 
 [Документация](https://marketplace.apilayer.com/exchangerates_data-api#documentation)  
 
-Насройка `.env`:
+Настройка `.env`:
 ```.env
 # Exchange Rates Data API.
 EXCHANGE_RATES_API_KEY=API_KEY
@@ -717,7 +716,7 @@ transaction_amount_convert(transaction: Transaction, to_currency: str = "RUB") -
 Для транзакций в целевой валюте возвращается исходная сумма. 
 Суммы для валют, отличных от целевой валюты, конвертируются через метод `convert` **Exchange Rates Data API**.
 
-Передаваемая информацмя: 
+Передаваемая информация: 
 - transaction - транзакция с суммой и кодом валюты в `operationAmount`;
 - to_currency - целевая валюта.
 
@@ -757,7 +756,7 @@ get_transactions_from_csv(file_path: str | Path) -> list[Transaction]
 
 Структура файла:
 
-| field | type    | descript                 |
+| field | type    | description                 |
 |-------|---------|--------------------------|
 | id    | int     | Идентификатор транзакции |
 | state | string  | Статус транзакции        |
@@ -784,7 +783,7 @@ get_transactions_from_xls(file_path: str | Path) -> list[Transaction]
 
 Модуль `src.fields` содержит функции обработки конфигурационного файла 
 `config/field_aliases.json`, который содержит пути полей для различных структур 
-данных используемых в проекта источников.
+данных, используемых источниками проекта.
 
 ### Структура `field_aliases.json`
 
@@ -851,17 +850,17 @@ get_by_path(item: Mapping[str, Any], path: str) -> Any
 get_field_value(transaction: Mapping[str, Any], field_name: str, field_aliases: Mapping[str, list[str]],) -> Any
 ```
 
-Функция осуществляет поиск значения поля транзакции по первому доступному `aliase`.
+Функция осуществляет поиск значения поля транзакции по первому доступному `alias`.
 Возвращает значение первого найденного поля или пустой список, если поле
 отсутствует в справочнике либо транзакции.
 
 ## Логирование
 
-Логирование проекта осуществлены с помощью библиотеки `logging`. Логи помещены 
+Логирование проекта осуществляется с помощью библиотеки `logging`. Логи помещены 
 в папку `logs`. Логируются успешные и ошибочные случаи.
 
 ### Модуль `masks`
-Логуруются в `logs/masks.log`
+Логируются в `logs/masks.log`
 
 Структура логирования:
 ```
@@ -875,7 +874,7 @@ get_field_value(transaction: Mapping[str, Any], field_name: str, field_aliases: 
 ```
 
 ### Модуль `utils`
-Логуруются в `logs/utils.log`
+Логируются в `logs/utils.log`
 
 Структура логирования:
 ```
@@ -886,7 +885,7 @@ get_field_value(transaction: Mapping[str, Any], field_name: str, field_aliases: 
 ```
 
 ### Модуль `readers`
-Логуруются в `logs/readers.log`
+Логируются в `logs/readers.log`
 
 Структура логирования:
 ```
@@ -902,18 +901,18 @@ get_field_value(transaction: Mapping[str, Any], field_name: str, field_aliases: 
 
 Структура логирования:
 ```
-2026-09-22 04:15:31,537 - processing - filter_by_state - DEBUG - Начало фильтрации для 6 зваписей по статусу EXECUTED.
+2026-09-22 04:15:31,537 - processing - filter_by_state - DEBUG - Начало фильтрации для 6 записей по статусу EXECUTED.
 2026-09-22 04:15:31,539 - processing - filter_by_state - INFO - Получено записей 2 со статусом EXECUTED.
-2026-09-22 04:15:31,539 - processing - filter_by_state - DEBUG - Начало фильтрации для 6 зваписей по статусу EXECUTED.
+2026-09-22 04:15:31,539 - processing - filter_by_state - DEBUG - Начало фильтрации для 6 записей по статусу EXECUTED.
 2026-09-22 04:15:31,541 - processing - filter_by_state - INFO - Получено записей 2 со статусом EXECUTED.
-2026-09-22 04:15:31,543 - processing - filter_by_state - DEBUG - Начало фильтрации для 6 зваписей по статусу CANCELED.
+2026-09-22 04:15:31,543 - processing - filter_by_state - DEBUG - Начало фильтрации для 6 записей по статусу CANCELED.
 ```
 
 ### Модуль `fields`
 
 Логируется в `logs/fields.log`
 
-Структура лргирования:
+Структура логирования:
 ```
 2026-09-22 04:15:29,938 - fields - load_fields - DEBUG - Начало загрузки структур из файла: config/field_aliases.json
 2026-09-22 04:15:29,951 - fields - load_fields - INFO - Успешно загружено транзакций из файла config/field_aliases.json: 9
@@ -1045,7 +1044,7 @@ addopts = "-v --cov=src --cov-branch --cov-report=term-missing --cov-fail-under=
 Создать подробный HTML-отчёт о покрытии:
 
 ```shell
-poetry run pytest --cov-report=html
+poetry run pytest --cov=src --cov=main --cov-branch --cov-report=html
 ```
 
 После выполнения отчёт будет доступен в каталоге `htmlcov`.
@@ -1055,7 +1054,7 @@ poetry run pytest --cov-report=html
 Запустить Flake8:
 
 ```shell
-poetry run flake8 src tests
+poetry run flake8 main.py src tests
 ```
 
 Проверить форматирование Black без изменения файлов:
@@ -1085,5 +1084,5 @@ poetry run isort src tests
 Проверить аннотации типов с помощью mypy:
 
 ```shell
-poetry run mypy
+poetry run mypy main.py src tests
 ```
