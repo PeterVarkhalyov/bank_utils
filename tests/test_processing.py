@@ -1,10 +1,18 @@
 """Pytest-тесты функций фильтрации и сортировки операций."""
 
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
-from src.processing import Transaction, filter_by_state, sort_by_date
+from src.processing import (
+    Transaction,
+    filter_by_currency_code,
+    filter_by_state,
+    process_bank_operations,
+    process_bank_search,
+    sort_by_date,
+)
 
 
 def test_filter_by_default_state(transactions: list[Transaction]) -> None:
@@ -38,6 +46,64 @@ def test_filter_returns_new_list(transactions: list[Transaction]) -> None:
 
     assert result is not transactions
     assert transactions == original
+
+
+def test_filter_by_currency_code_uses_rub_by_default(
+    generator_transactions: list[Transaction],
+) -> None:
+    """По умолчанию должны возвращаться только операции в рублях."""
+    result = filter_by_currency_code(generator_transactions)
+
+    assert [transaction["id"] for transaction in result] == [873106923, 594226727]
+
+
+@pytest.mark.parametrize(
+    ("currency_code", "expected_ids"),
+    [
+        ("USD", [939719570, 142264268, 895315941]),
+        ("RUB", [873106923, 594226727]),
+        ("EUR", []),
+        ("rub", []),
+        ("", []),
+    ],
+)
+def test_filter_by_currency_code(
+    generator_transactions: list[Transaction],
+    currency_code: str,
+    expected_ids: list[int],
+) -> None:
+    """Операции должны фильтроваться по точному коду валюты."""
+    result = filter_by_currency_code(generator_transactions, currency_code)
+
+    assert [transaction["id"] for transaction in result] == expected_ids
+
+
+def test_filter_by_currency_code_skips_incomplete_operations() -> None:
+    """Операции с некорректной структурой валюты должны пропускаться."""
+    transactions: list[Transaction] = [
+        {},
+        {"operationAmount": None},
+        {"operationAmount": {}},
+        {"operationAmount": {"currency": None}},
+        {"operationAmount": {"currency": {}}},
+        {"id": 1, "operationAmount": {"currency": {"code": "RUB"}}},
+    ]
+
+    result = filter_by_currency_code(transactions)
+
+    assert result == [{"id": 1, "operationAmount": {"currency": {"code": "RUB"}}}]
+
+
+def test_filter_by_currency_code_returns_new_list(
+    generator_transactions: list[Transaction],
+) -> None:
+    """Фильтрация валюты не должна изменять исходный список."""
+    original = [transaction.copy() for transaction in generator_transactions]
+
+    result = filter_by_currency_code(generator_transactions)
+
+    assert result is not generator_transactions
+    assert generator_transactions == original
 
 
 @pytest.mark.parametrize(
@@ -75,20 +141,28 @@ def test_sort_by_nonstandard_date_strings(
     assert [transaction["id"] for transaction in result] == [2, 1, 3]
 
 
-def test_sort_without_date_raises_key_error(
+def test_sort_without_date_returns_empty_list(
     transactions_without_date: list[Transaction],
 ) -> None:
-    """Отсутствующий ключ date вызывает KeyError."""
-    with pytest.raises(KeyError, match="date"):
-        sort_by_date(transactions_without_date)
+    """Отсутствующий ключ date приводит к пустому результату."""
+    assert sort_by_date(transactions_without_date) == []
 
 
-def test_sort_mixed_date_types_raises_type_error(
+def test_sort_mixed_date_types_returns_empty_list(
     transactions_with_mixed_date_types: list[Transaction],
 ) -> None:
-    """Несравнимые типы значений date вызывают TypeError."""
-    with pytest.raises(TypeError):
-        sort_by_date(transactions_with_mixed_date_types)
+    """Несравнимые типы значений date приводят к пустому результату."""
+    assert sort_by_date(transactions_with_mixed_date_types) == []
+
+
+def test_sort_by_date_skips_empty_dictionaries(
+    transactions: list[Transaction],
+) -> None:
+    """Пустые словари не должны попадать в результат сортировки."""
+    result = sort_by_date([{}, *transactions])
+
+    assert len(result) == len(transactions)
+    assert {} not in result
 
 
 @pytest.mark.parametrize("transactions", [[], [{}]])
@@ -97,3 +171,111 @@ def test_filter_with_empty_or_incomplete_data(
 ) -> None:
     """Пустые и неполные данные корректно дают пустой результат."""
     assert filter_by_state(transactions) == []
+
+
+@pytest.fixture
+def transactions_with_descriptions() -> list[Transaction]:
+    """Вернуть операции с разными описаниями."""
+    return [
+        {"id": 1, "description": "Перевод организации"},
+        {"id": 2, "description": "Перевод со счета на счет"},
+        {"id": 3, "description": "ПЕРЕВОД ОРГАНИЗАЦИИ"},
+        {"id": 4, "description": "Открытие вклада"},
+        {"id": 5, "description": "Оплата заказа (ООО Ромашка)"},
+        {"id": 6},
+        {"id": 7, "description": None},
+    ]
+
+
+@pytest.mark.parametrize(
+    ("search_string", "expected_ids"),
+    [
+        ("перевод", [1, 2, 3]),
+        ("организации", [1, 3]),
+        ("ВКЛАД", [4]),
+        ("несуществующая операция", []),
+        ("", []),
+    ],
+)
+def test_process_bank_search(
+    transactions_with_descriptions: list[Transaction],
+    search_string: str,
+    expected_ids: list[int],
+) -> None:
+    """Поиск должен находить строку в описании без учёта регистра."""
+    result = process_bank_search(transactions_with_descriptions, search_string)
+
+    assert [transaction["id"] for transaction in result] == expected_ids
+
+
+def test_process_bank_search_treats_special_characters_as_text(
+    transactions_with_descriptions: list[Transaction],
+) -> None:
+    """Специальные символы регулярных выражений должны искаться буквально."""
+    result = process_bank_search(transactions_with_descriptions, "(ООО Ромашка)")
+
+    assert [transaction["id"] for transaction in result] == [5]
+
+
+def test_process_bank_search_returns_new_list(
+    transactions_with_descriptions: list[Transaction],
+) -> None:
+    """Результат поиска должен быть новым списком."""
+    result = process_bank_search(transactions_with_descriptions, "перевод")
+
+    assert result is not transactions_with_descriptions
+
+
+def test_process_bank_search_skips_key_error() -> None:
+    """Операция пропускается, если получение описания вызвало KeyError."""
+    with patch("src.processing.get_field_value", side_effect=KeyError("description")):
+        result = process_bank_search([{"id": 1}], "перевод")
+
+    assert result == []
+
+
+def test_process_bank_operations_counts_requested_categories(
+    transactions_with_descriptions: list[Transaction],
+) -> None:
+    """Для каждой запрошенной категории должно возвращаться число операций."""
+    categories = [
+        "Перевод организации",
+        "Перевод со счета на счет",
+        "Открытие вклада",
+        "Закрытие вклада",
+    ]
+
+    result = process_bank_operations(transactions_with_descriptions, categories)
+
+    assert result == {
+        "Перевод организации": 1,
+        "Перевод со счета на счет": 1,
+        "Открытие вклада": 1,
+        "Закрытие вклада": 0,
+    }
+
+
+@pytest.mark.parametrize(
+    ("transactions", "categories", "expected"),
+    [
+        ([], ["Перевод организации"], {"Перевод организации": 0}),
+        ([{"id": 1}], ["Перевод организации"], {"Перевод организации": 0}),
+        ([{"description": None}], ["Перевод организации"], {"Перевод организации": 0}),
+        ([{"description": "Перевод организации"}], [], {}),
+    ],
+)
+def test_process_bank_operations_handles_empty_or_incomplete_data(
+    transactions: list[Transaction],
+    categories: list[str],
+    expected: dict[str, int],
+) -> None:
+    """Пустые и неполные данные должны обрабатываться без ошибок."""
+    assert process_bank_operations(transactions, categories) == expected
+
+
+def test_process_bank_operations_skips_key_error() -> None:
+    """Операция пропускается, если получение описания вызвало KeyError."""
+    with patch("src.processing.get_field_value", side_effect=KeyError("description")):
+        result = process_bank_operations([{"id": 1}], ["Перевод организации"])
+
+    assert result == {"Перевод организации": 0}

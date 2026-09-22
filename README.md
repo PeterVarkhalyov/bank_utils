@@ -13,6 +13,7 @@
 - автоматическое распознавание карты или счёта по входной строке;
 - преобразование даты;
 - фильтрация операций по статусу;
+- фильтрация операций по коду валюты;
 - сортировка операций по дате;
 - последовательная обработка транзакций с помощью генераторов;
 - генерация номеров банковских карт в заданном диапазоне;
@@ -20,13 +21,19 @@
 - обработка JSON-файлов или ответов от API в формате JSON;
 - обработка CSV и Excel файлов;
 - конвертация суммы транзакции в целевую валюту с помощью Exchange Rates Data API;
-- логированние;
+- логирование;
+- осуществляет поиск банковских операции по строке в описании `description`;
+- производит подсчет количества банковских операций по категориям `description`;
+- настройка полей различных источников данных через конфигурационный файл;
+- интерактивная обработка и вывод транзакций через консольное меню;
 - проверка кода с помощью Flake8, Black, isort и mypy.
 
-- ## Структура проекта
+## Структура проекта
 
 ```text
 .
+├── config/
+│   └── field_aliases.json
 ├── data/
 │   ├── operations.json
 │   ├── transactions.csv
@@ -37,6 +44,7 @@
 │   ├── __init__.py
 │   ├── decorators.py
 │   ├── external_api.py
+│   ├── fields.py
 │   ├── generators.py
 │   ├── masks.py
 │   ├── processing.py
@@ -47,18 +55,20 @@
 │   ├── __init__.py
 │   ├── test_decorators.py
 │   ├── test_external_api.py
+│   ├── test_fields.py
 │   ├── test_generators.py
 │   ├── test_logging.py
+│   ├── test_main.py
 │   ├── test_masks.py
 │   ├── test_processing.py
 │   ├── test_readers.py
 │   ├── test_utils.py
 │   └── test_widget.py
 ├── .coverage
-├── .env
 ├── .env.example
 ├── .flake8
 ├── .gitignore
+├── main.py
 ├── pyproject.toml
 ├── poetry.lock
 └── README.md
@@ -102,7 +112,7 @@ git --version
 5. Проверьте, что проект работает:
 
    ```shell
-   poetry run python -m unittest discover -v
+   poetry run pytest
    ```
 
 Поскольку GitHub-адрес ещё не привязан к текущему локальному репозиторию,
@@ -146,6 +156,38 @@ Visa Platinum 7000 79** **** 6361
 [{'id': 41428829, 'state': 'EXECUTED', 'date': '2019-07-03T18:35:29.512364'}, {'id': 939719570, 'state': 'EXECUTED', 'date': '2018-06-30T02:08:58.425572'}]
 [{'id': 41428829, 'state': 'EXECUTED', 'date': '2019-07-03T18:35:29.512364'}, {'id': 615064591, 'state': 'CANCELED', 'date': '2018-10-14T08:21:33.419441'}, {'id': 594226727, 'state': 'CANCELED', 'date': '2018-09-12T21:27:25.241689'}, {'id': 939719570, 'state': 'EXECUTED', 'date': '2018-06-30T02:08:58.425572'}]
 ```
+
+## Модуль `main`
+
+Файл `main.py` является точкой входа в приложение и связывает функции чтения,
+фильтрации, сортировки и форматирования банковских операций.
+
+Запуск консольной программы:
+
+```shell
+poetry run python main.py
+```
+
+Во время работы программа последовательно предлагает:
+
+1. выбрать источник данных: JSON, CSV или XLSX;
+2. отфильтровать операции по статусу;
+3. при необходимости отсортировать операции по дате;
+4. оставить только рублёвые операции;
+5. выполнить поиск по слову в описании;
+6. вывести найденные операции с замаскированными реквизитами.
+
+При вводе неподдерживаемого значения соответствующий вопрос задаётся повторно.
+Каждая найденная операция выводится в формате:
+
+```text
+11.03.2024 Перевод организации
+Visa Platinum 7000 79** **** 6361 -> Счет **4305
+100.00 RUB (руб.)
+```
+
+Если операции, соответствующие выбранным условиям, отсутствуют, программа
+выводит сообщение и завершает работу без ошибки.
 
 ## Модуль `masks`
 
@@ -266,6 +308,23 @@ filter_by_state([{'id': 41428829, 'state': 'EXECUTED', 'date': '2019-07-03T18:35
 [{'id': 41428829, 'state': 'EXECUTED', 'date': '2019-07-03T18:35:29.512364'}, {'id': 939719570, 'state': 'EXECUTED', 'date': '2018-06-30T02:08:58.425572'}]
 ```
 
+### `filter_by_currency_code`
+
+```python
+filter_by_currency_code(transactions: list[Transaction], currency_code: str = "RUB",) -> list[Transaction]
+```
+
+Функция возвращает банковские операции с указанным кодом валюты.
+Код валюты извлекается из вложенного поля ``operationAmount.currency.code``. 
+Операции с отсутствующей или некорректной структурой этого поля пропускаются.
+
+Функция принимает:
+- список словарей с данными банковских операций;
+- Код валюты для фильтрации. По умолчанию ``RUB``.
+
+Функция возвращает:
+- новый список операций с указанным кодом валюты.
+
 ### `sort_by_date`
 
 ```python
@@ -281,6 +340,43 @@ sort_by_date([{"id": 41428829, "state": "EXECUTED", "date": "2019-07-03T18:35:29
               {"id": 615064591, "state": "CANCELED", "date": "2018-10-14T08:21:33.419441"}])
 [{'id': 41428829, 'state': 'EXECUTED', 'date': '2019-07-03T18:35:29.512364'}, {'id': 615064591, 'state': 'CANCELED', 'date': '2018-10-14T08:21:33.419441'}, {'id': 594226727, 'state': 'CANCELED', 'date': '2018-09-12T21:27:25.241689'}, {'id': 939719570, 'state': 'EXECUTED', 'date': '2018-06-30T02:08:58.425572'}]
 ```
+
+### `process_bank_search`
+
+```python
+process_bank_search(transactions: list[Transaction], search_string: str) -> list[Transaction]
+```
+
+Функция выбирает банковские операции по строке в описании.
+Поиск выполняется без учёта регистра. Строка поиска обрабатывается как 
+обычный текст, поэтому специальные символы регулярных выражений не изменяют 
+её смысл. Операции без строкового поля ``description``  пропускаются.
+
+Функция принимает:
+- список банковских операций;
+- строка, которую нужно найти в описании операции.
+
+Функция возвращает:
+- новый список операций, описания которых содержат строку поиска; 
+- для пустой строки поиска возвращается пустой список.
+
+### `process_bank_operations`
+
+```python
+process_bank_operations(transactions: list[Transaction], categories: list[str]) -> dict[str, int]
+```
+
+Функция производит расчет количества банковских операций по категориям.
+Название категории сравнивается с полем ``description`` операции.
+Категории, для которых операции не найдены, остаются в результате
+со значением ``0``.
+
+Функция принимает:
+- список банковских операций;
+- список названий категорий операций.
+
+Функция возвращает:
+- словарь с количеством операций в каждой категории.
 
 ## Модуль `generators`
 
@@ -446,7 +542,7 @@ divide(1, 0)
 
 Структура транзакции из `data/operations.json`:
 
-```python
+```
 {
     "id": int,
     "state": string,
@@ -460,7 +556,7 @@ divide(1, 0)
     },
     "description": string,
     "from": string,
-    "to": string"
+    "to": string
 }
 ```
 Значение ключей:
@@ -503,7 +599,7 @@ get_transactions_from_json("data/operations.json")
 Для обработки транзакции используется сервис **Exchange Rates Data API**. 
 [Документация](https://marketplace.apilayer.com/exchangerates_data-api#documentation)  
 
-Насройка `.env`:
+Настройка `.env`:
 ```.env
 # Exchange Rates Data API.
 EXCHANGE_RATES_API_KEY=API_KEY
@@ -620,7 +716,7 @@ transaction_amount_convert(transaction: Transaction, to_currency: str = "RUB") -
 Для транзакций в целевой валюте возвращается исходная сумма. 
 Суммы для валют, отличных от целевой валюты, конвертируются через метод `convert` **Exchange Rates Data API**.
 
-Передаваемая информацмя: 
+Передаваемая информация: 
 - transaction - транзакция с суммой и кодом валюты в `operationAmount`;
 - to_currency - целевая валюта.
 
@@ -660,7 +756,7 @@ get_transactions_from_csv(file_path: str | Path) -> list[Transaction]
 
 Структура файла:
 
-| field | type    | descript                 |
+| field | type    | description                 |
 |-------|---------|--------------------------|
 | id    | int     | Идентификатор транзакции |
 | state | string  | Статус транзакции        |
@@ -683,13 +779,88 @@ get_transactions_from_xls(file_path: str | Path) -> list[Transaction]
 - возвращает список словарей с транзакциями. Если файл отсутствует,
 недоступен, пуст или содержит некорректные данные, возвращается пустой список.
 
+## Модуль `fields`
+
+Модуль `src.fields` содержит функции обработки конфигурационного файла 
+`config/field_aliases.json`, который содержит пути полей для различных структур 
+данных, используемых источниками проекта.
+
+### Структура `field_aliases.json`
+
+Структура данных:
+```JSON
+{
+  "id": [
+    "id"
+  ],
+  "state": [
+    "state"
+  ],
+  "date": [
+    "date"
+  ],
+  "amount": [
+    "amount",
+    "operationAmount.amount"
+  ],
+  "currency_name": [
+    "currency_name",
+    "operationAmount.currency.name"
+  ],
+  "currency_code": [
+    "currency_code",
+    "operationAmount.currency.code"
+  ],
+  "from": [
+    "from"
+  ],
+  "to": [
+    "to"
+  ],
+  "description": [
+    "description"
+  ]
+}
+```
+
+### `load_fields`
+
+```python
+load_fields(file_path: str | Path) -> Any
+```
+
+Функция принимает:
+- Путь к файлу `config/field_aliases.json`.
+
+Функция возвращает
+- Словарь путей к полям.
+
+### `get_by_path`
+
+```python
+get_by_path(item: Mapping[str, Any], path: str) -> Any
+```
+Буквальный ключ имеет приоритет: для пути ``currency.code`` сначала
+проверяется ключ с таким полным именем, а затем вложенная структура
+``{"currency": {"code": ...}}``.
+
+### `get_field_value`
+
+```python
+get_field_value(transaction: Mapping[str, Any], field_name: str, field_aliases: Mapping[str, list[str]],) -> Any
+```
+
+Функция осуществляет поиск значения поля транзакции по первому доступному `alias`.
+Возвращает значение первого найденного поля или пустой список, если поле
+отсутствует в справочнике либо транзакции.
+
 ## Логирование
 
-Логирование проекта осуществлены с помощью библиотеки `logging`. Логи помещены 
+Логирование проекта осуществляется с помощью библиотеки `logging`. Логи помещены 
 в папку `logs`. Логируются успешные и ошибочные случаи.
 
 ### Модуль `masks`
-Логуруются в `logs/masks.log`
+Логируются в `logs/masks.log`
 
 Структура логирования:
 ```
@@ -703,7 +874,7 @@ get_transactions_from_xls(file_path: str | Path) -> list[Transaction]
 ```
 
 ### Модуль `utils`
-Логуруются в `logs/utils.log`
+Логируются в `logs/utils.log`
 
 Структура логирования:
 ```
@@ -714,7 +885,7 @@ get_transactions_from_xls(file_path: str | Path) -> list[Transaction]
 ```
 
 ### Модуль `readers`
-Логуруются в `logs/readers.log`
+Логируются в `logs/readers.log`
 
 Структура логирования:
 ```
@@ -724,6 +895,32 @@ get_transactions_from_xls(file_path: str | Path) -> list[Transaction]
 2026-09-15 19:52:43,487 - readers - get_transactions_from_csv - ERROR - Некорректная структура файла empty.csv: отсутствует строка наименования столбцов.
 ```
 
+### Модуль `processing`
+
+Логируется в `logs/processing.log`
+
+Структура логирования:
+```
+2026-09-22 04:15:31,537 - processing - filter_by_state - DEBUG - Начало фильтрации для 6 записей по статусу EXECUTED.
+2026-09-22 04:15:31,539 - processing - filter_by_state - INFO - Получено записей 2 со статусом EXECUTED.
+2026-09-22 04:15:31,539 - processing - filter_by_state - DEBUG - Начало фильтрации для 6 записей по статусу EXECUTED.
+2026-09-22 04:15:31,541 - processing - filter_by_state - INFO - Получено записей 2 со статусом EXECUTED.
+2026-09-22 04:15:31,543 - processing - filter_by_state - DEBUG - Начало фильтрации для 6 записей по статусу CANCELED.
+```
+
+### Модуль `fields`
+
+Логируется в `logs/fields.log`
+
+Структура логирования:
+```
+2026-09-22 04:15:29,938 - fields - load_fields - DEBUG - Начало загрузки структур из файла: config/field_aliases.json
+2026-09-22 04:15:29,951 - fields - load_fields - INFO - Успешно загружено транзакций из файла config/field_aliases.json: 9
+2026-09-22 04:15:31,365 - fields - load_fields - DEBUG - Начало загрузки структур из файла: config\field_aliases.json
+2026-09-22 04:15:31,366 - fields - load_fields - INFO - Успешно загружено транзакций из файла config\field_aliases.json: 1
+2026-09-22 04:15:31,368 - fields - load_fields - DEBUG - Начало загрузки структур из файла: aliases.json
+2026-09-22 04:15:31,369 - fields - load_fields - ERROR - Не удалось загрузить справочник aliases.json: Файл не найден
+```
 
 ## Тестирование
 
@@ -740,8 +937,10 @@ poetry install
 - `tests/conftest.py` — общие фикстуры с наборами банковских операций;
 - `tests/test_decorators.py` — тесты вывода логов в консоль и файл;
 - `tests/test_external_api.py` — тесты обработки методов API;
+- `tests/test_fields.py` — тесты обработки файла настройки путей полей для различных источников данных;
 - `tests/test_generators.py` — тесты фильтрации, описаний и номеров карт;
 - `tests/test_logging.py` — тесты логирования;
+- `tests/test_main.py` — тесты консольного меню и основной последовательности обработки;
 - `tests/test_masks.py` — тесты маскирования карт и счетов;
 - `tests/test_processing.py` — тесты фильтрации и сортировки операций;
 - `tests/test_readers.py` — тесты обработки CSV и Excel файлов;
@@ -754,6 +953,8 @@ poetry install
 значениями.
 
 Для проверки API, обработки CSV и Excel файлов используются Mock и patch.
+В `tests/test_main.py` с помощью `patch` имитируются ответы пользователя,
+загрузка каждого формата файла и результаты последовательных фильтров.
 
 Проверяются:
 - корректные номера карт и счетов;
@@ -761,6 +962,7 @@ poetry install
 - различные названия и регистры типов карт и счетов;
 - корректные, граничные и ошибочные даты;
 - фильтрация по различным статусам;
+- фильтрация по различным кодам валюты;
 - сортировка по возрастанию и убыванию;
 - одинаковые и нестандартные даты;
 - пустой или повреждённый JSON;
@@ -795,8 +997,10 @@ poetry run pytest
 ```shell
 poetry run pytest tests/test_decorators.py
 poetry run pytest tests/test_external_api.py
+poetry run pytest tests/test_fields.py
 poetry run pytest tests/test_generators.py
 poetry run pytest tests/test_logging.py
+poetry run pytest tests/test_main.py
 poetry run pytest tests/test_masks.py
 poetry run pytest tests/test_processing.py
 poetry run pytest tests/test_readers.py
@@ -840,7 +1044,7 @@ addopts = "-v --cov=src --cov-branch --cov-report=term-missing --cov-fail-under=
 Создать подробный HTML-отчёт о покрытии:
 
 ```shell
-poetry run pytest --cov-report=html
+poetry run pytest --cov=src --cov=main --cov-branch --cov-report=html
 ```
 
 После выполнения отчёт будет доступен в каталоге `htmlcov`.
@@ -850,7 +1054,7 @@ poetry run pytest --cov-report=html
 Запустить Flake8:
 
 ```shell
-poetry run flake8 src tests
+poetry run flake8 main.py src tests
 ```
 
 Проверить форматирование Black без изменения файлов:
@@ -880,5 +1084,5 @@ poetry run isort src tests
 Проверить аннотации типов с помощью mypy:
 
 ```shell
-poetry run mypy
+poetry run mypy main.py src tests
 ```
