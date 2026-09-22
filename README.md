@@ -24,12 +24,15 @@
 - логированние;
 - выбирает банковские операции по строке в описании `description`;
 - производит расчет количества банковских операций по категориям `description`;
+- настройка полей различных источников данных через конфигурационный файл;
 - проверка кода с помощью Flake8, Black, isort и mypy.
 
 - ## Структура проекта
 
 ```text
 .
+├── config/
+│   └── field_aliases.json
 ├── data/
 │   ├── operations.json
 │   ├── transactions.csv
@@ -40,6 +43,7 @@
 │   ├── __init__.py
 │   ├── decorators.py
 │   ├── external_api.py
+│   ├── fields.py
 │   ├── generators.py
 │   ├── masks.py
 │   ├── processing.py
@@ -50,6 +54,7 @@
 │   ├── __init__.py
 │   ├── test_decorators.py
 │   ├── test_external_api.py
+│   ├── test_fields.py
 │   ├── test_generators.py
 │   ├── test_logging.py
 │   ├── test_masks.py
@@ -740,6 +745,81 @@ get_transactions_from_xls(file_path: str | Path) -> list[Transaction]
 - возвращает список словарей с транзакциями. Если файл отсутствует,
 недоступен, пуст или содержит некорректные данные, возвращается пустой список.
 
+## Модуль `fields`
+
+Модуль `src.fields` содержит функции обработки конфигурационного файла 
+`config/field_aliases.json`, который содержит пути полей для различных структур 
+данных используемых в проекта источников.
+
+### Структура `field_aliases.json`
+
+Структура данных:
+```JSON
+{
+  "id": [
+    "id"
+  ],
+  "state": [
+    "state"
+  ],
+  "date": [
+    "date"
+  ],
+  "amount": [
+    "amount",
+    "operationAmount.amount"
+  ],
+  "currency_name": [
+    "currency_name",
+    "operationAmount.currency.name"
+  ],
+  "currency_code": [
+    "currency_code",
+    "operationAmount.currency.code"
+  ],
+  "from": [
+    "from"
+  ],
+  "to": [
+    "to"
+  ],
+  "description": [
+    "description"
+  ]
+}
+```
+
+### `load_fields`
+
+```python
+load_fields(file_path: str | Path) -> Any
+```
+
+Функция принимает:
+- Путь к файлу `config/field_aliases.json`.
+
+Функция возвращает
+- Словарь путей к полям.
+
+### `get_by_path`
+
+```python
+get_by_path(item: Mapping[str, Any], path: str) -> Any
+```
+Буквальный ключ имеет приоритет: для пути ``currency.code`` сначала
+проверяется ключ с таким полным именем, а затем вложенная структура
+``{"currency": {"code": ...}}``.
+
+### `get_field_value`
+
+```python
+get_field_value(transaction: Mapping[str, Any], field_name: str, field_aliases: Mapping[str, list[str]],) -> Any
+```
+
+Функция осуществляет поиск значения поля транзакции по первому доступному `aliase`.
+Возвращает значение первого найденного поля или пустой список, если поле
+отсутствует в справочнике либо транзакции.
+
 ## Логирование
 
 Логирование проекта осуществлены с помощью библиотеки `logging`. Логи помещены 
@@ -781,6 +861,33 @@ get_transactions_from_xls(file_path: str | Path) -> list[Transaction]
 2026-09-15 19:52:43,487 - readers - get_transactions_from_csv - ERROR - Некорректная структура файла empty.csv: отсутствует строка наименования столбцов.
 ```
 
+### Модуль `processing`
+
+Логируется в `logs/processing.log`
+
+Структура логирования:
+```
+2026-09-22 04:15:31,537 - processing - filter_by_state - DEBUG - Начало фильтрации для 6 зваписей по статусу EXECUTED.
+2026-09-22 04:15:31,539 - processing - filter_by_state - INFO - Получено записей 2 со статусом EXECUTED.
+2026-09-22 04:15:31,539 - processing - filter_by_state - DEBUG - Начало фильтрации для 6 зваписей по статусу EXECUTED.
+2026-09-22 04:15:31,541 - processing - filter_by_state - INFO - Получено записей 2 со статусом EXECUTED.
+2026-09-22 04:15:31,543 - processing - filter_by_state - DEBUG - Начало фильтрации для 6 зваписей по статусу CANCELED.
+```
+
+### Модуль `fields`
+
+Логируется в `logs/fields.log`
+
+Структура лргирования:
+```
+2026-09-22 04:15:29,938 - fields - load_fields - DEBUG - Начало загрузки структур из файла: config/field_aliases.json
+2026-09-22 04:15:29,951 - fields - load_fields - INFO - Успешно загружено транзакций из файла config/field_aliases.json: 9
+2026-09-22 04:15:31,365 - fields - load_fields - DEBUG - Начало загрузки структур из файла: config\field_aliases.json
+2026-09-22 04:15:31,366 - fields - load_fields - INFO - Успешно загружено транзакций из файла config\field_aliases.json: 1
+2026-09-22 04:15:31,368 - fields - load_fields - DEBUG - Начало загрузки структур из файла: aliases.json
+2026-09-22 04:15:31,369 - fields - load_fields - ERROR - Не удалось загрузить справочник aliases.json: Файл не найден
+```
+
 ## Тестирование
 
 Тесты проекта написаны с помощью `pytest`. Для измерения покрытия используется
@@ -796,6 +903,7 @@ poetry install
 - `tests/conftest.py` — общие фикстуры с наборами банковских операций;
 - `tests/test_decorators.py` — тесты вывода логов в консоль и файл;
 - `tests/test_external_api.py` — тесты обработки методов API;
+- `tests/test_fields.py` — тесты обработки файла настройки путей полей для различных источников данных;
 - `tests/test_generators.py` — тесты фильтрации, описаний и номеров карт;
 - `tests/test_logging.py` — тесты логирования;
 - `tests/test_masks.py` — тесты маскирования карт и счетов;
@@ -852,6 +960,7 @@ poetry run pytest
 ```shell
 poetry run pytest tests/test_decorators.py
 poetry run pytest tests/test_external_api.py
+poetry run pytest tests/test_fields.py
 poetry run pytest tests/test_generators.py
 poetry run pytest tests/test_logging.py
 poetry run pytest tests/test_masks.py
