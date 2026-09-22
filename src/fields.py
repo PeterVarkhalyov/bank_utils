@@ -110,7 +110,7 @@ def get_field_value(
     try:
         paths = field_aliases[field_name]
     except KeyError as error:
-        logging.error(
+        logger.error(
             "Поле %s отсутствует в справочнике: %s",
             field_name,
             error,
@@ -123,5 +123,5 @@ def get_field_value(
         except KeyError:
             continue
 
-    logging.error("Поле %s отсутствует в транзакции", field_name)
+    logger.error("Поле %s отсутствует в транзакции", field_name)
     return []

@@ -136,3 +136,16 @@ def test_get_field_value_returns_empty_list_when_value_is_unavailable(
 ) -> None:
     """Неизвестное или отсутствующее поле должно дать пустой список."""
     assert get_field_value({}, field_name, aliases) == []
+
+
+def test_get_field_value_uses_module_logger_for_missing_field() -> None:
+    """Отсутствующее поле не должно передаваться корневому логеру."""
+    with (
+        patch("src.fields.logger.error") as mocked_module_error,
+        patch("src.fields.logging.error") as mocked_root_error,
+    ):
+        result = get_field_value({}, "from", {"from": ["from"]})
+
+    assert result == []
+    mocked_module_error.assert_any_call("Поле %s отсутствует в транзакции", "from")
+    mocked_root_error.assert_not_called()
