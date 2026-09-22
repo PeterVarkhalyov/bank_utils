@@ -1,0 +1,32 @@
+{
+  "id": [
+    "id"
+  ],
+  "state": [
+    "state"
+  ],
+  "date": [
+    "date"
+  ],
+  "amount": [
+    "amount",
+    "operationAmount.amount"
+  ],
+  "currency_name": [
+    "currency_name",
+    "operationAmount.currency.name"
+  ],
+  "currency_code": [
+    "currency_code",
+    "operationAmount.currency.code"
+  ],
+  "from": [
+    "from"
+  ],
+  "to": [
+    "to"
+  ],
+  "description": [
+    "description"
+  ]
+}

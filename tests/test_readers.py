@@ -167,6 +167,24 @@ def test_get_transactions_from_xls_returns_empty_list_for_empty_file() -> None:
     mocked_warning.assert_not_called()
 
 
+def test_get_transactions_from_xls_does_not_warn_when_all_rows_are_valid(
+    reader_transactions: list[Transaction],
+) -> None:
+    """При отсутствии пропусков предупреждение записываться не должно."""
+    mocked_data_frame = Mock()
+    mocked_data_frame.empty = False
+    mocked_data_frame.to_dict.return_value = reader_transactions
+
+    with (
+        patch("src.readers.pd.read_excel", return_value=mocked_data_frame),
+        patch("src.readers.logger.warning") as mocked_warning,
+    ):
+        result = get_transactions_from_xls("transactions.xlsx")
+
+    assert result == reader_transactions
+    mocked_warning.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "error",
     [

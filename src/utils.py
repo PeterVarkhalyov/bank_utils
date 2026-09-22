@@ -62,7 +62,7 @@ def get_transactions_from_json(file_path: str | Path) -> list[Transaction]:
     skipped_items = len(data) - len(transactions)
 
     if skipped_items:
-        logger.error(
+        logger.warning(
             "В файле %s пропущено некорректных элементов: %d",
             file_path,
             skipped_items,

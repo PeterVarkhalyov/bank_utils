@@ -1,6 +1,7 @@
 """Pytest-тесты функций фильтрации и сортировки операций."""
 
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
@@ -140,20 +141,28 @@ def test_sort_by_nonstandard_date_strings(
     assert [transaction["id"] for transaction in result] == [2, 1, 3]
 
 
-def test_sort_without_date_raises_key_error(
+def test_sort_without_date_returns_empty_list(
     transactions_without_date: list[Transaction],
 ) -> None:
-    """Отсутствующий ключ date вызывает KeyError."""
-    with pytest.raises(KeyError, match="date"):
-        sort_by_date(transactions_without_date)
+    """Отсутствующий ключ date приводит к пустому результату."""
+    assert sort_by_date(transactions_without_date) == []
 
 
-def test_sort_mixed_date_types_raises_type_error(
+def test_sort_mixed_date_types_returns_empty_list(
     transactions_with_mixed_date_types: list[Transaction],
 ) -> None:
-    """Несравнимые типы значений date вызывают TypeError."""
-    with pytest.raises(TypeError):
-        sort_by_date(transactions_with_mixed_date_types)
+    """Несравнимые типы значений date приводят к пустому результату."""
+    assert sort_by_date(transactions_with_mixed_date_types) == []
+
+
+def test_sort_by_date_skips_empty_dictionaries(
+    transactions: list[Transaction],
+) -> None:
+    """Пустые словари не должны попадать в результат сортировки."""
+    result = sort_by_date([{}, *transactions])
+
+    assert len(result) == len(transactions)
+    assert {} not in result
 
 
 @pytest.mark.parametrize("transactions", [[], [{}]])
@@ -217,6 +226,14 @@ def test_process_bank_search_returns_new_list(
     assert result is not transactions_with_descriptions
 
 
+def test_process_bank_search_skips_key_error() -> None:
+    """Операция пропускается, если получение описания вызвало KeyError."""
+    with patch("src.processing.get_field_value", side_effect=KeyError("description")):
+        result = process_bank_search([{"id": 1}], "перевод")
+
+    assert result == []
+
+
 def test_process_bank_operations_counts_requested_categories(
     transactions_with_descriptions: list[Transaction],
 ) -> None:
@@ -254,3 +271,11 @@ def test_process_bank_operations_handles_empty_or_incomplete_data(
 ) -> None:
     """Пустые и неполные данные должны обрабатываться без ошибок."""
     assert process_bank_operations(transactions, categories) == expected
+
+
+def test_process_bank_operations_skips_key_error() -> None:
+    """Операция пропускается, если получение описания вызвало KeyError."""
+    with patch("src.processing.get_field_value", side_effect=KeyError("description")):
+        result = process_bank_operations([{"id": 1}], ["Перевод организации"])
+
+    assert result == {"Перевод организации": 0}
